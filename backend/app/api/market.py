@@ -1,11 +1,12 @@
 """
-市场行情API - 模拟数据
+市场行情API
 """
 from fastapi import APIRouter
 from datetime import datetime
 import random
 
 from app.models.schemas import MarketIndex, APIResponse, ListResponse
+from app.services.sector_flow import SectorFlowService
 
 router = APIRouter(prefix="/market", tags=["市场"])
 
@@ -64,3 +65,41 @@ async def get_market_status():
         "status": "交易中" if is_trading else "已休市",
         "current_time": now.strftime("%Y-%m-%d %H:%M:%S")
     })
+
+
+@router.get("/sectors", response_model=ListResponse)
+async def get_sector_flows():
+    """获取板块资金流向列表（真实数据）"""
+    sectors = await SectorFlowService.get_sector_list()
+    return ListResponse(data=sectors, total=len(sectors))
+
+
+@router.get("/sectors/top", response_model=ListResponse)
+async def get_top_sector_flows(limit: int = 5):
+    """获取资金净流入最多的板块（真实数据）"""
+    sectors = await SectorFlowService.get_top_sectors(limit)
+    return ListResponse(data=sectors, total=len(sectors))
+
+
+@router.get("/sectors/{sector_code}", response_model=APIResponse)
+async def get_sector_detail(sector_code: str):
+    """获取单个板块的资金流向详情（真实数据）"""
+    flow_data = await SectorFlowService.get_sector_flow_detail(sector_code)
+    
+    if not flow_data:
+        return APIResponse(data={
+            "sector_code": sector_code,
+            "sector_name": "暂无数据",
+            "inflow_percent": 0,
+            "outflow_percent": 0,
+            "main_net": 0,
+            "details": [
+                {"label": "超大单", "value": 0},
+                {"label": "大单", "value": 0},
+                {"label": "中单", "value": 0},
+                {"label": "小单", "value": 0}
+            ],
+            "update_time": "--"
+        })
+    
+    return APIResponse(data=flow_data)

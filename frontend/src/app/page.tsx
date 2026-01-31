@@ -68,9 +68,43 @@ export default function HomePage() {
 
     fetchData();
 
-    // 定时刷新（每30秒，仅开盘时）
-    const interval = setInterval(fetchData, 30000);
-    return () => clearInterval(interval);
+    // 定时刷新
+    // - 基金数据：每30秒刷新（仅开盘时）
+    // - 资金流向：每15分钟刷新（数据变化较慢）
+    const fundInterval = setInterval(() => {
+      // 只刷新基金和图表数据
+      const refreshFundData = async () => {
+        try {
+          const [fundRes, chartRes] = await Promise.all([
+            getFundDetail(defaultFundCode),
+            getFundChart(defaultFundCode, chartPeriod),
+          ]);
+          if (fundRes.success) setFund(fundRes.data);
+          if (chartRes.success) setChartData(chartRes.data);
+        } catch (error) {
+          console.error('刷新基金数据失败:', error);
+        }
+      };
+      refreshFundData();
+    }, 30000);
+
+    // 资金流向每15分钟刷新一次
+    const flowInterval = setInterval(() => {
+      const refreshFlowData = async () => {
+        try {
+          const flowRes = await getFundFlow(defaultFundCode);
+          if (flowRes.success) setFlowData(flowRes.data);
+        } catch (error) {
+          console.error('刷新资金流向失败:', error);
+        }
+      };
+      refreshFlowData();
+    }, 900000); // 15分钟 = 900000毫秒
+
+    return () => {
+      clearInterval(fundInterval);
+      clearInterval(flowInterval);
+    };
   }, [chartPeriod]);
 
   const currentPeriodLabel = PERIODS.find(p => p.value === chartPeriod)?.label || '分时';
@@ -114,7 +148,17 @@ export default function HomePage() {
       </div>
 
       {/* 资金流向 */}
-      <FlowCard flow={flowData} />
+      <FlowCard 
+        flow={flowData} 
+        onRefresh={async () => {
+          try {
+            const flowRes = await getFundFlow(defaultFundCode);
+            if (flowRes.success) setFlowData(flowRes.data);
+          } catch (error) {
+            console.error('刷新资金流向失败:', error);
+          }
+        }}
+      />
     </div>
   );
 }

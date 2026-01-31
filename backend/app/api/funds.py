@@ -14,6 +14,7 @@ from app.models.schemas import (
 )
 from app.services.fund_api import FundAPIService, DEFAULT_FUND_CODES
 from app.services.database import get_db, DatabaseService
+from app.services.sector_flow import SectorFlowService
 
 router = APIRouter(prefix="/funds", tags=["基金"])
 
@@ -115,20 +116,45 @@ async def get_fund_chart(
 
 @router.get("/{fund_code}/flow", response_model=APIResponse)
 async def get_fund_flow(fund_code: str):
-    """获取资金流向（模拟数据）"""
-    flow_data = {
+    """获取基金相关板块的资金流向（真实数据）"""
+    # 获取基金信息以支持智能板块匹配
+    fund_info = FundAPIService.FUNDS_DB.get(fund_code, {})
+    fund_name = fund_info.get("name", "")
+    
+    flow_data = await SectorFlowService.get_sector_flow_by_fund(fund_code, fund_name)
+    
+    if not flow_data:
+        # 如果获取失败，返回空数据结构
+        return APIResponse(data={
+            "fund_code": fund_code,
+            "sector": "暂无数据",
+            "sector_code": "",
+            "inflow_percent": 0,
+            "outflow_percent": 0,
+            "main_net": 0,
+            "details": [
+                {"label": "超大单", "value": 0},
+                {"label": "大单", "value": 0},
+                {"label": "中单", "value": 0},
+                {"label": "小单", "value": 0}
+            ],
+            "update_time": "--",
+            "match_reason": ""
+        })
+    
+    # 适配前端数据格式
+    return APIResponse(data={
         "fund_code": fund_code,
-        "sector": "白酒概念",
-        "inflow_percent": 65,
-        "outflow_percent": 35,
-        "details": [
-            {"label": "超大单", "value": 2.5},
-            {"label": "大单", "value": -0.8},
-            {"label": "中单", "value": -1.2},
-            {"label": "小单", "value": -0.5}
-        ]
-    }
-    return APIResponse(data=flow_data)
+        "sector": flow_data["sector_name"],
+        "sector_code": flow_data["sector_code"],
+        "inflow_percent": flow_data["inflow_percent"],
+        "outflow_percent": flow_data["outflow_percent"],
+        "main_net": flow_data["main_net"],
+        "details": flow_data["details"],
+        "update_time": flow_data["update_time"],
+        "match_reason": flow_data.get("match_reason", ""),
+        "refresh_interval": 900  # 建议刷新间隔：15分钟（秒）
+    })
 
 
 # ========== 用户持仓API（SQLite存储）==========
