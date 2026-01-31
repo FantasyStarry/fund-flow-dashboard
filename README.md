@@ -105,12 +105,13 @@ git clone https://github.com/FantasyStarry/fund-flow-dashboard.git
 cd fund-flow-dashboard
 ```
 
-### 2. 启动后端服务
+### 2. 安装依赖
 
+**后端依赖:**
 ```bash
 cd backend
 
-# 创建虚拟环境
+# 创建虚拟环境 (推荐)
 python -m venv venv
 
 # 激活虚拟环境
@@ -121,9 +122,56 @@ source venv/bin/activate
 
 # 安装依赖
 pip install -r requirements.txt
+```
 
-# 启动服务
+**前端依赖:**
+```bash
+cd frontend
+npm install
+```
+
+### 3. 启动服务
+
+#### 方式一：使用启动脚本 (推荐 Windows 用户)
+
+**同时启动前后端:**
+```powershell
+.\start-dev.ps1
+```
+
+**只启动后端:**
+```powershell
+.\start-dev.ps1 -BackendOnly
+# 或
+.\start-backend.ps1
+```
+
+**只启动前端:**
+```powershell
+.\start-dev.ps1 -FrontendOnly
+```
+
+**自定义端口:**
+```powershell
+.\start-dev.ps1 -BackendPort 8080 -FrontendPort 3001
+```
+
+**生产模式启动后端:**
+```powershell
+.\start-backend.ps1 -Production -Workers 4
+```
+
+#### 方式二：手动启动
+
+**启动后端:**
+```bash
+cd backend
+
+# 使用脚本
 python run.py
+
+# 或使用 uvicorn 命令
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 后端服务将在 http://localhost:8000 启动
@@ -131,15 +179,9 @@ python run.py
 - API 文档: http://localhost:8000/docs
 - 替代文档: http://localhost:8000/redoc
 
-### 3. 启动前端服务
-
+**启动前端:**
 ```bash
 cd frontend
-
-# 安装依赖
-npm install
-
-# 启动开发服务器
 npm run dev
 ```
 
