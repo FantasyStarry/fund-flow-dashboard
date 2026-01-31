@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FundPro - 实时基金数据中心</title>
+    <style>
+        :root {
+            /* 配色方案 - 暗色专业风 */
+            --bg-body: #0f172a;       /* 深蓝黑背景 */
+            --bg-panel: #1e293b;      /* 面板背景 */
+            --bg-hover: #334155;
+            --text-main: #f1f5f9;
+            --text-muted: #94a3b8;
+            --border: #334155;
+            
+            /* 涨跌色 (中国标准) */
+            --up: #ef4444;            /* 红涨 */
+            --up-bg: rgba(239, 68, 68, 0.15);
+            --down: #10b981;          /* 绿跌 */
+            --down-bg: rgba(16, 185, 129, 0.15);
+            
+            --primary: #3b82f6;       /* 品牌蓝 */
+            --sidebar-width: 240px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+
+        body {
+            background-color: var(--bg-body);
+            color: var(--text-main);
+            display: flex;
+            height: 100vh;
+            overflow: hidden; /* 防止整个页面滚动，只滚动内容区 */
+        }
+
+        /* --- 侧边栏 (Sidebar) --- */
+        .sidebar {
+            width: var(--sidebar-width);
+            background-color: var(--bg-panel);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.3s ease;
+            z-index: 100;
+        }
+
+        .logo-area {
+            padding: 20px;
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--primary);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .nav-menu {
+            flex: 1;
+            padding: 20px 0;
+            overflow-y: auto;
+        }
+
+        .nav-item {
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+        .nav-item:hover, .nav-item.active {
+            background-color: var(--bg-hover);
+            color: var(--text-main);
+            border-left: 3px solid var(--primary);
+        }
+
+        /* --- 主内容区 (Main Content) --- */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* 顶部 Header */
+        header {
+            height: 64px;
+            background-color: var(--bg-panel);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+        }
+
+        .header-left { display: flex; align-items: center; gap: 15px; }
+        .market-status {
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .live-dot { width: 6px; height: 6px; background: currentColor; border-radius: 50%; animation: blink 1.5s infinite; }
+        
+        /* 仪表盘网格布局 */
+        .dashboard-container {
+            padding: 24px;
+            overflow-y: auto;
+            display: grid;
+            grid-template-columns: 2fr 1fr; /* 桌面：左2右1 */
+            grid-template-rows: auto auto 1fr;
+            gap: 24px;
+            height: 100%;
+        }
+
+        /* 卡片通用样式 */
+        .card {
+            background-color: var(--bg-panel);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 1. 顶部核心数据卡片 (占据整行) */
+        .fund-header-card {
+            grid-column: 1 / -1;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .fund-info h1 { font-size: 24px; margin-bottom: 4px; }
+        .fund-info .code { color: var(--text-muted); font-size: 14px; background: #334155; padding: 2px 6px; border-radius: 4px; }
+        
+        .price-box { text-align: right; }
+        .price-main { font-size: 36px; font-weight: 700; font-family: 'Roboto Mono', monospace; }
+        .price-change { font-size: 18px; font-weight: 600; }
+        
+        .text-up { color: var(--up); }
+        .text-down { color: var(--down); }
+        .bg-flash-up { animation: flashRed 1s; }
+        .bg-flash-down { animation: flashGreen 1s; }
+
+        /* 2. 图表区域 (左侧) */
+        .chart-card {
+            grid-column: 1 / 2;
+            min-height: 400px;
+        }
+        .chart-controls { display: flex; gap: 10px; margin-bottom: 15px; }
+        .chart-btn { 
+            background: transparent; border: 1px solid var(--border); color: var(--text-muted); 
+            padding: 4px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;
+        }
+        .chart-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+        
+        #mainCanvas { width: 100%; height: 100%; min-height: 320px; }
+
+        /* 3. 持仓列表 (右侧) */
+        .holdings-card {
+            grid-column: 2 / 3;
+            overflow: hidden;
+        }
+        .card-title { font-size: 16px; font-weight: 600; margin-bottom: 15px; display: flex; justify-content: space-between; }
+        
+        .stock-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        .stock-table th { text-align: left; color: var(--text-muted); padding-bottom: 10px; font-weight: 500; }
+        .stock-table td { padding: 12px 0; border-bottom: 1px solid var(--border); }
+        .stock-table tr:last-child td { border-bottom: none; }
+        .stock-bar { height: 4px; background: var(--bg-hover); border-radius: 2px; margin-top: 6px; overflow: hidden; }
+        .stock-bar-fill { height: 100%; border-radius: 2px; }
+
+        /* 汉堡菜单 (默认隐藏) */
+        .menu-toggle { display: none; font-size: 24px; cursor: pointer; background: none; border: none; color: var(--text-main); }
+
+        /* --- 响应式设计 (Responsive) --- */
+        
+        /* 平板尺寸 */
+        @media (max-width: 1024px) {
+            .dashboard-container {
+                grid-template-columns: 1fr; /* 改为单列 */
+                grid-template-rows: auto auto auto;
+            }
+            .chart-card { grid-column: 1 / -1; }
+            .holdings-card { grid-column: 1 / -1; }
+        }
+
+        /* 手机尺寸 */
+        @media (max-width: 768px) {
+            :root { --sidebar-width: 0px; } /* 隐藏侧边栏 */
+            
+            .sidebar {
+                position: fixed;
+                left: -250px; /* 移出屏幕 */
+                top: 0; bottom: 0;
+                width: 250px;
+                box-shadow: 2px 0 10px rgba(0,0,0,0.5);
+            }
+            .sidebar.open { transform: translateX(250px); }
+            
+            .menu-toggle { display: block; margin-right: 15px; }
+            .header-left { gap: 5px; }
+            
+            .dashboard-container { padding: 16px; gap: 16px; }
+            
+            /* 调整头部卡片布局 */
+            .fund-header-card { flex-direction: column; align-items: flex-start; gap: 10px; }
+            .price-box { text-align: left; display: flex; align-items: baseline; gap: 10px; width: 100%; }
+            .price-main { font-size: 32px; }
+            
+            /* 隐藏次要数据列 */
+            .mobile-hide { display: none; }
+        }
+
+        /* 动画关键帧 */
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        @keyframes flashRed { 0% { background-color: var(--up-bg); } 100% { background-color: var(--bg-panel); } }
+        @keyframes flashGreen { 0% { background-color: var(--down-bg); } 100% { background-color: var(--bg-panel); } }
+
+    </style>
+</head>
+<body>
+
+    <!-- 侧边栏导航 -->
+    <aside class="sidebar" id="sidebar">
+        <div class="logo-area">
+            <span style="font-size: 24px;">📊</span> FundPro
+        </div>
+        <nav class="nav-menu">
+            <a href="#" class="nav-item active"><span>🏠</span> 市场总览</a>
+            <a href="#" class="nav-item"><span>❤️</span> 自选基金</a>
+            <a href="#" class="nav-item"><span>💼</span> 持仓分析</a>
+            <a href="#" class="nav-item"><span>📰</span> 资讯新闻</a>
+            <div style="height: 20px;"></div>
+            <div style="padding: 0 20px; font-size: 12px; color: var(--text-muted);">账户管理</div>
+            <a href="#" class="nav-item"><span>⚙️</span> 设置</a>
+        </nav>
+    </aside>
+
+    <!-- 主内容区 -->
+    <main class="main-content">
+        <!-- 顶部栏 -->
+        <header>
+            <div class="header-left">
+                <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
+                <div class="market-status">
+                    <div class="live-dot"></div> 交易中 (Live)
+                </div>
+                <!-- 搜索框 (桌面显示) -->
+                <input type="text" placeholder="输入代码/拼音..." style="background:var(--bg-body); border:1px solid var(--border); padding:6px 12px; border-radius:4px; color:white; margin-left:10px; display:none;" class="desktop-only">
+            </div>
+            <div style="display:flex; gap:15px; align-items:center;">
+                <span style="font-size:14px; color:var(--text-muted);">上证: <span class="text-up">3285.42 (+0.5%)</span></span>
+                <div style="width:32px; height:32px; background:var(--primary); border-radius:50%; display:flex; align-items:center; justify-content:center;">User</div>
+            </div>
+        </header>
+
+        <!-- 仪表盘网格 -->
+        <div class="dashboard-container">
+            
+            <!-- 1. 基金头部信息卡 -->
+            <div class="card fund-header-card" id="headerCard">
+                <div class="fund-info">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <h1>招商中证白酒指数(LOF)A</h1>
+                        <span class="code">161725</span>
+                    </div>
+                    <div style="color:var(--text-muted); margin-top:5px;">
+                        类型: 指数型-股票 | 风险: 高 | 规模: 485.23亿
+                    </div>
+                </div>
+                <div class="price-box">
+                    <div class="price-main text-up" id="currentPrice">1.2450</div>
+                    <div class="price-change text-up" id="priceChange">+2.45% (+0.0298)</div>
+                    <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">实时估值 14:35:02</div>
+                </div>
+            </div>
+
+            <!-- 2. 实时走势图卡片 -->
+            <div class="card chart-card">
+                <div class="card-title">
+                    <span>走势分析</span>
+                    <div class="chart-controls">
+                        <button class="chart-btn active" onclick="switchPeriod('min')">分时</button>
+                        <button class="chart-btn" onclick="switchPeriod('day')">日K</button>
+                        <button class="chart-btn" onclick="switchPeriod('week')">周K</button>
+                    </div>
+                </div>
+                <div style="flex:1; position:relative;">
+                    <canvas id="mainCanvas"></canvas>
+                    <!-- 十字准星信息 (悬浮显示) -->
+                    <div id="crosshairInfo" style="position:absolute; top:0; left:0; pointer-events:none; display:none; background:rgba(0,0,0,0.8); padding:4px 8px; border-radius:4px; font-size:12px;"></div>
+                </div>
+            </div>
+
+            <!-- 3. 持仓影响分析 -->
+            <div class="card holdings-card">
+                <div class="card-title">
+                    <span>重仓股实时贡献</span>
+                    <span style="font-size:12px; color:var(--primary); cursor:pointer;">查看全部</span>
+                </div>
+                <table class="stock-table">
+                    <thead>
+                        <tr>
+                            <th>股票名称</th>
+                            <th style="text-align:right;">现价</th>
+                            <th style="text-align:right;">涨跌幅</th>
+                            <th style="text-align:right;" class="mobile-hide">贡献度</th>
+                        </tr>
+                    </thead>
+                    <tbody id="stockListBody">
+                        <!-- JS 填充数据 -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 4. 底部资金流向 (Web端专属) -->
+            <div class="card" style="grid-column: 1 / -1;">
+                <div class="card-title">板块资金流向 (白酒概念)</div>
+                <div style="display:flex; height:20px; background:#334155; border-radius:10px; overflow:hidden;">
+                    <div style="width:65%; background:var(--up); display:flex; align-items:center; justify-content:center; font-size:12px;">主力流入 65%</div>
+                    <div style="width:35%; background:var(--down); display:flex; align-items:center; justify-content:center; font-size:12px;">流出 35%</div>
+                </div>
+                <div style="display:flex; justify-content:space-between; margin-top:8px; font-size:12px; color:var(--text-muted);">
+                    <span>超大单: +2.5亿</span>
+                    <span>大单: -0.8亿</span>
+                    <span>中单: -1.2亿</span>
+                    <span>小单: -0.5亿</span>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- 遮罩层 (移动端菜单打开时) -->
+    <div id="overlay" style="position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:90; display:none;" onclick="toggleSidebar()"></div>
+
+    <script>
+        // --- 1. 响应式菜单逻辑 ---
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('overlay');
+        const desktopSearch = document.querySelector('.desktop-only');
+
+        function toggleSidebar() {
+            sidebar.classList.toggle('open');
+            overlay.style.display = sidebar.classList.contains('open') ? 'block' : 'none';
+        }
+
+        // --- 2. 模拟数据 ---
+        const stocks = [
+            { name: "贵州茅台", price: 1780.50, change: 1.2, weight: 15 },
+            { name: "五粮液", price: 155.20, change: 0.8, weight: 12 },
+            { name: "泸州老窖", price: 210.30, change: -0.5, weight: 10 },
+            { name: "山西汾酒", price: 260.00, change: 2.1, weight: 8 },
+            { name: "洋河股份", price: 120.50, change: -1.1, weight: 6 },
+            { name: "古井贡酒", price: 240.10, change: 0.3, weight: 5 },
+        ];
+        
+        let currentFundPrice = 1.2450;
+        const yesterdayClose = 1.2152;
+        let chartMode = 'min'; // 'min', 'day', 'week'
+
+        // --- 3. 渲染持仓表格 ---
+        function renderStocks() {
+            const tbody = document.getElementById('stockListBody');
+            tbody.innerHTML = '';
+            
+            stocks.forEach(stock => {
+                const isUp = stock.change >= 0;
+                const colorClass = isUp ? 'text-up' : 'text-down';
+                const sign = isUp ? '+' : '';
+                const contribution = (stock.change * stock.weight / 100).toFixed(2); // 简单估算贡献
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>
+                        <div>${stock.name}</div>
+                        <div class="stock-bar"><div class="stock-bar-fill" style="width:${stock.weight * 3}%; background:${isUp ? 'var(--up)' : 'var(--down)'}"></div></div>
+                    </td>
+                    <td style="text-align:right; font-family:'Roboto Mono'">${stock.price.toFixed(2)}</td>
+                    <td style="text-align:right;" class="${colorClass}">${sign}${stock.change.toFixed(2)}%</td>
+                    <td style="text-align:right; opacity:0.8;" class="mobile-hide ${contribution >=0 ? 'text-up':'text-down'}">${contribution >=0 ? '+':''}${contribution}%</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // --- 4. Canvas 绘制分时图/趋势图 ---
+        const canvas = document.getElementById('mainCanvas');
+        const ctx = canvas.getContext('2d');
+        let chartData = [];
+        let simulationInterval;
+
+        // 生成初始数据
+        function generateData(type) {
+            chartData = [];
+            let count = type === 'min' ? 240 : 100; // 分时240个点，K线模拟100个点
+            let base = yesterdayClose;
+            let volatility = type === 'min' ? 0.002 : 0.05; // K线波动更大
+
+            for(let i=0; i<count; i++) {
+                let change = (Math.random() - 0.48) * volatility;
+                base = base + change;
+                chartData.push(base);
+            }
+            if(type === 'min') currentFundPrice = chartData[chartData.length-1];
+        }
+
+        function resizeCanvas() {
+            const parent = canvas.parentElement;
+            canvas.width = parent.clientWidth;
+            canvas.height = parent.clientHeight;
+            drawChart();
+        }
+
+        function drawChart() {
+            const w = canvas.width;
+            const h = canvas.height;
+            ctx.clearRect(0, 0, w, h);
+
+            // 1. 绘制网格
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([5, 5]);
+            const yMiddle = h / 2;
+            ctx.beginPath(); ctx.moveTo(0, yMiddle); ctx.lineTo(w, yMiddle); ctx.stroke();
+
+            if(chartData.length === 0) return;
+
+            // 2. 计算比例
+            const maxVal = Math.max(...chartData);
+            const minVal = Math.min(...chartData);
+            const refVal = chartMode === 'min' ? yesterdayClose : (maxVal+minVal)/2;
+            const maxDiff = Math.max(Math.abs(maxVal - refVal), Math.abs(minVal - refVal));
+            const range = maxDiff * 1.2 || 0.01;
+            
+            const getY = (val) => yMiddle - ((val - refVal) / range) * (h/2);
+            
+            // 3. 绘制填充区
+            const stepX = w / chartData.length;
+            
+            ctx.beginPath();
+            ctx.moveTo(0, yMiddle);
+            chartData.forEach((val, i) => ctx.lineTo(i * stepX, getY(val)));
+            
+            // 闭合路径用于填充
+            ctx.lineTo((chartData.length -1) * stepX, h);
+            ctx.lineTo(0, h);
+            
+            const gradient = ctx.createLinearGradient(0, 0, 0, h);
+            // 分时图用红色，周/日K用蓝色区别
+            const color = chartMode === 'min' ? '239, 68, 68' : '59, 130, 246'; 
+            
+            gradient.addColorStop(0, `rgba(${color}, 0.2)`);
+            gradient.addColorStop(1, `rgba(${color}, 0)`);
+            ctx.fillStyle = gradient;
+            ctx.fill();
+
+            // 4. 绘制线条
+            ctx.beginPath();
+            ctx.setLineDash([]);
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = `rgb(${color})`;
+            chartData.forEach((val, i) => {
+                if(i===0) ctx.moveTo(i * stepX, getY(val));
+                else ctx.lineTo(i * stepX, getY(val));
+            });
+            ctx.stroke();
+
+            // 5. 呼吸灯 (仅在分时模式显示)
+            if(chartMode === 'min') {
+                const lastX = (chartData.length -1) * stepX;
+                const lastY = getY(chartData[chartData.length-1]);
+                ctx.beginPath(); ctx.arc(lastX, lastY, 4, 0, Math.PI*2);
+                ctx.fillStyle = `rgb(${color})`; ctx.fill();
+            }
+        }
+
+        // --- 5. 交互与API逻辑 ---
+        
+        // 切换图表周期
+        window.switchPeriod = function(type) {
+            chartMode = type;
+            // 更新按钮状态
+            document.querySelectorAll('.chart-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            // 模拟数据重新生成
+            generateData(type);
+            drawChart();
+            
+            // 打印真实API地址供开发者参考
+            getRealHistoryData(type);
+        }
+
+        // ★★★ 核心：真实 API 获取指南 ★★★
+        function getRealHistoryData(type) {
+            const code = 'sz161725'; // 示例代码：招商中证白酒 (LOF)
+            let url = "";
+            let description = "";
+
+            if (type === 'day') {
+                // 腾讯财经 日K 接口
+                // param: 市场代码, day, start_date, end_date, count, qfq(前复权)
+                url = `https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=${code},day,,,320,qfq`;
+                description = "腾讯财经 [日K] 接口";
+            } else if (type === 'week') {
+                // 腾讯财经 周K 接口
+                url = `https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=${code},week,,,320,qfq`;
+                description = "腾讯财经 [周K] 接口";
+            } else {
+                console.log("切换到分时模拟数据");
+                return;
+            }
+
+            console.group("📊 如何获取真实数据?");
+            console.log(`%c${description}`, "color: #3b82f6; font-weight: bold; font-size: 14px;");
+            console.log("请求地址:", url);
+            console.log("提示: 在浏览器直接打开链接可见 JSON 数据。在代码中使用需处理跨域(CORS)或使用JSONP。");
+            console.groupEnd();
+        }
+
+        // --- 6. 实时模拟引擎 ---
+        function simulateRealtime() {
+            if(chartMode !== 'min') return; // 只有分时图才模拟跳动
+
+            const lastIdx = chartData.length - 1;
+            chartData[lastIdx] = chartData[lastIdx] + (Math.random()-0.5) * 0.0005;
+            
+            const newPrice = chartData[lastIdx];
+            const oldPrice = currentFundPrice;
+            currentFundPrice = newPrice;
+            
+            // 更新 DOM
+            const priceEl = document.getElementById('currentPrice');
+            const changeEl = document.getElementById('priceChange');
+            const headerCard = document.getElementById('headerCard');
+            
+            priceEl.innerText = newPrice.toFixed(4);
+            const change = newPrice - yesterdayClose;
+            const pct = (change / yesterdayClose) * 100;
+            const isUp = change >= 0;
+            
+            changeEl.innerText = `${(isUp?'+':'')}${pct.toFixed(2)}% (${(isUp?'+':'')}${change.toFixed(4)})`;
+            priceEl.className = `price-main ${isUp ? 'text-up' : 'text-down'}`;
+            changeEl.className = `price-change ${isUp ? 'text-up' : 'text-down'}`;
+            
+            if(Math.abs(newPrice - oldPrice) > 0.0001) {
+                headerCard.classList.remove('bg-flash-up', 'bg-flash-down');
+                void headerCard.offsetWidth; 
+                headerCard.classList.add(isUp ? 'bg-flash-up' : 'bg-flash-down');
+            }
+            
+            renderStocks();
+            drawChart();
+        }
+
+        // 初始化
+        generateData('min');
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas(); 
+        renderStocks();
+        setInterval(simulateRealtime, 2000); 
+
+        if(window.innerWidth > 768) {
+            desktopSearch.style.display = 'block';
+        }
+        window.addEventListener('resize', () => {
+             desktopSearch.style.display = window.innerWidth > 768 ? 'block' : 'none';
+        });
+
+    </script>
+</body>
+</html>
