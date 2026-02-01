@@ -1,70 +1,24 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { fundAPI } from '@/lib/api';
-
-interface Holding {
-  stock_code: string;
-  stock_name: string;
-  weight: number;
-  change_percent: number;
-  current_price: number;
-}
-
-interface FundHoldingsData {
-  fund_code: string;
-  quarter: string;
-  update_time: string;
-  holdings: Holding[];
-}
+import { useFundHoldings } from '@/lib/useFundData';
+import { FundHoldingsSkeleton } from '@/components/ui/Skeleton';
 
 interface FundHoldingsCardProps {
   fundCode: string;
 }
 
 export default function FundHoldingsCard({ fundCode }: FundHoldingsCardProps) {
-  const [data, setData] = useState<FundHoldingsData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { holdingsData, isLoading, error } = useFundHoldings(fundCode);
 
-  useEffect(() => {
-    const fetchHoldings = async () => {
-      try {
-        setLoading(true);
-        const response = await fundAPI.getFundHoldings(fundCode);
-        if (response.data) {
-          setData(response.data);
-        } else {
-          setError('暂无持仓数据');
-        }
-      } catch (err) {
-        setError('获取持仓数据失败');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchHoldings();
-  }, [fundCode]);
-
-  if (loading) {
-    return (
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 animate-pulse">
-        <div className="h-5 bg-slate-800 rounded w-1/3 mb-4" />
-        <div className="space-y-3">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="h-10 bg-slate-800 rounded" />
-          ))}
-        </div>
-      </div>
-    );
+  if (isLoading) {
+    return <FundHoldingsSkeleton />;
   }
 
-  if (error || !data) {
+  if (error || !holdingsData) {
     return (
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
         <div className="text-sm text-slate-500 text-center py-4">
-          {error || '暂无数据'}
+          {error ? '获取持仓数据失败' : '暂无数据'}
         </div>
       </div>
     );
@@ -79,17 +33,17 @@ export default function FundHoldingsCard({ fundCode }: FundHoldingsCardProps) {
             重仓股实时行情
           </h3>
           <p className="text-xs text-slate-500 mt-1">
-            {data.quarter} · 前5大持仓
+            {holdingsData.quarter} · 前5大持仓
           </p>
         </div>
         <div className="text-xs text-slate-500">
-          更新: {data.update_time.split(' ')[1]}
+          更新: {holdingsData.update_time.split(' ')[1]}
         </div>
       </div>
 
       {/* 持仓列表 */}
       <div className="space-y-2">
-        {data.holdings.map((holding, index) => (
+        {holdingsData.holdings.map((holding, index) => (
           <div
             key={holding.stock_code}
             className="flex items-center justify-between p-3 bg-slate-800/30 rounded-xl hover:bg-slate-800/50 transition-colors"

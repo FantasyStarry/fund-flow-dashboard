@@ -1,47 +1,20 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { getHoldings, Holding } from '@/lib/api';
+import { useUserHoldings } from '@/lib/useFundData';
+import { HoldingsCardSkeleton } from '@/components/ui/Skeleton';
 import { TrendingUp, TrendingDown, Trash2 } from 'lucide-react';
 
 export default function HoldingsCard() {
-  const [holdings, setHoldings] = useState<Holding[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { holdings, isLoading } = useUserHoldings();
 
-  useEffect(() => {
-    const fetchHoldings = async () => {
-      try {
-        const response = await getHoldings();
-        if (response.success && Array.isArray(response.data)) {
-          setHoldings(response.data);
-        } else {
-          setHoldings([]);
-        }
-      } catch (error) {
-        console.error('获取持仓失败:', error);
-        setHoldings([]);
-      } finally {
-        setLoading(false);
-      }
-    };
+  // 确保 holdings 是数组
+  const safeHoldings = Array.isArray(holdings) ? holdings : [];
 
-    fetchHoldings();
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 animate-pulse">
-        <div className="h-6 bg-slate-800 rounded w-1/3 mb-4" />
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-12 bg-slate-800 rounded" />
-          ))}
-        </div>
-      </div>
-    );
+  if (isLoading) {
+    return <HoldingsCardSkeleton />;
   }
 
-  if (holdings.length === 0) {
+  if (safeHoldings.length === 0) {
     return (
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
         <h3 className="text-lg font-semibold text-white mb-4">我的持仓</h3>
@@ -62,7 +35,7 @@ export default function HoldingsCard() {
       </div>
 
       <div className="space-y-4">
-        {holdings.map((holding) => {
+        {safeHoldings.map((holding) => {
           const profit = holding.profit_loss || 0;
           const profitPercent = holding.profit_loss_percent || 0;
           const isProfit = profit >= 0;
@@ -105,18 +78,18 @@ export default function HoldingsCard() {
         <div className="flex justify-between text-sm">
           <span className="text-slate-500">总市值</span>
           <span className="font-mono text-white">
-            ¥{holdings.reduce((sum, h) => sum + (h.market_value || 0), 0).toFixed(2)}
+            ¥{safeHoldings.reduce((sum, h) => sum + (h.market_value || 0), 0).toFixed(2)}
           </span>
         </div>
         <div className="flex justify-between text-sm mt-2">
           <span className="text-slate-500">总盈亏</span>
           <span className={`font-mono ${
-            holdings.reduce((sum, h) => sum + (h.profit_loss || 0), 0) >= 0
+            safeHoldings.reduce((sum, h) => sum + (h.profit_loss || 0), 0) >= 0
               ? 'text-red-400'
               : 'text-emerald-400'
           }`}>
-            {holdings.reduce((sum, h) => sum + (h.profit_loss || 0), 0) >= 0 ? '+' : ''}
-            ¥{holdings.reduce((sum, h) => sum + (h.profit_loss || 0), 0).toFixed(2)}
+            {safeHoldings.reduce((sum, h) => sum + (h.profit_loss || 0), 0) >= 0 ? '+' : ''}
+            ¥{safeHoldings.reduce((sum, h) => sum + (h.profit_loss || 0), 0).toFixed(2)}
           </span>
         </div>
       </div>
