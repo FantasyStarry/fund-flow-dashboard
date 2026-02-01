@@ -6,6 +6,8 @@ import httpx
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
 
+from app.services.fund_sector_mapper import FundSectorMapper
+
 
 class SectorFlowService:
     """板块资金流向服务 - 东方财富API"""
@@ -239,101 +241,29 @@ class SectorFlowService:
     async def get_sector_flow_by_fund(fund_code: str, fund_name: str = "") -> Optional[Dict[str, Any]]:
         """
         根据基金代码获取相关板块的资金流向
-        根据基金类型智能匹配到对应的板块
+        使用基金板块映射服务（静态映射表 + 名称关键词匹配）
         """
-        # 先尝试精确匹配
-        sector_info = SectorFlowService.FUND_SECTOR_MAP.get(fund_code)
+        # 获取基金所属板块
+        sector_info = FundSectorMapper.get_fund_sector(fund_code, fund_name)
         
-        # 如果没有精确匹配，尝试根据基金名称智能匹配
-        if not sector_info and fund_name:
-            fund_name_lower = fund_name.lower()
-            for code, info in SectorFlowService.FUND_SECTOR_MAP.items():
-                if info["name"] in fund_name or info["reason"] in fund_name:
-                    sector_info = info
-                    break
-            
-            # 关键词匹配
-            if not sector_info:
-                keywords_map = {
-                    "白酒": "BK0438",
-                    "消费": "BK0438",
-                    "食品": "BK0438",
-                    "饮料": "BK0438",
-                    "医疗": "BK1040",
-                    "医药": "BK1040",
-                    "生物": "BK1044",
-                    "新能源": "BK1033",
-                    "电池": "BK1033",
-                    "锂电": "BK1033",
-                    "光伏": "BK1033",
-                    "芯片": "BK1044",
-                    "半导体": "BK1044",
-                    "科技": "BK1044",
-                    "电子": "BK0459",
-                    "软件": "BK0465",
-                    "互联网": "BK0481",
-                    "传媒": "BK0485",
-                    "银行": "BK0736",
-                    "证券": "BK0737",
-                    "保险": "BK0474",
-                    "金融": "BK0736",
-                    "地产": "BK0735",
-                    "房地产": "BK0735",
-                    "煤炭": "BK0437",
-                    "能源": "BK0437",
-                    "化工": "BK0731",
-                    "化学": "BK0731",
-                    "有色": "BK0732",
-                    "钢铁": "BK0739",
-                    "机械": "BK0739",
-                    "汽车": "BK1016",
-                    "通信": "BK0448",
-                    "5G": "BK0448",
-                    "游戏": "BK1046",
-                    "农业": "BK0433",
-                    "养殖": "BK0433",
-                    "军工": "BK0440",
-                    "航天": "BK0440",
-                    "航空": "BK0420",
-                    "机场": "BK0420",
-                    "港口": "BK0421",
-                    "物流": "BK0421",
-                    "铁路": "BK0421",
-                    "公路": "BK0421",
-                    "造纸": "BK0470",
-                    "印刷": "BK0470",
-                    "包装": "BK0733",
-                    "玻璃": "BK0546",
-                    "建材": "BK0546",
-                    "建筑": "BK0726",
-                    "工程": "BK0726",
-                    "贸易": "BK0484",
-                    "商业": "BK0484",
-                    "零售": "BK0484",
-                    "美容": "BK1035",
-                    "护理": "BK1035",
-                    "化妆": "BK1035",
-                }
-                for keyword, sector_code in keywords_map.items():
-                    if keyword in fund_name_lower:
-                        sector_name = SectorFlowService.SECTOR_MAP.get(sector_code, "相关板块")
-                        sector_info = {
-                            "code": sector_code,
-                            "name": sector_name,
-                            "reason": f"基金名称包含'{keyword}'"
-                        }
-                        break
-        
-        # 默认使用食品饮料板块
         if not sector_info:
-            sector_info = {"code": "BK0438", "name": "食品饮料", "reason": "默认板块"}
+            # 默认使用食品饮料板块
+            sector_info = {
+                "code": "BK0438",
+                "name": "食品饮料",
+                "reason": "默认板块",
+                "derived_from": "default"
+            }
+        
+        sector_code = sector_info["code"]
         
         # 获取板块资金流向
-        flow_data = await SectorFlowService.get_sector_flow_detail(sector_info["code"])
+        flow_data = await SectorFlowService.get_sector_flow_detail(sector_code)
         
         if flow_data:
             flow_data["match_reason"] = sector_info.get("reason", "")
             flow_data["fund_sector_name"] = sector_info.get("name", "")
+            flow_data["derived_from"] = sector_info.get("derived_from", "unknown")
         
         return flow_data
     

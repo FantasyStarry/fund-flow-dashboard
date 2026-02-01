@@ -12,11 +12,14 @@ export default function HoldingsCard() {
     const fetchHoldings = async () => {
       try {
         const response = await getHoldings();
-        if (response.success) {
+        if (response.success && Array.isArray(response.data)) {
           setHoldings(response.data);
+        } else {
+          setHoldings([]);
         }
       } catch (error) {
         console.error('获取持仓失败:', error);
+        setHoldings([]);
       } finally {
         setLoading(false);
       }

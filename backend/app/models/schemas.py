@@ -201,7 +201,7 @@ class ListResponse(BaseModel):
     """列表响应"""
     success: bool = True
     message: str = "success"
-    data: List[dict] = []
+    data: List = []
     total: int = 0
 
 

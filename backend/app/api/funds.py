@@ -15,6 +15,9 @@ from app.models.schemas import (
 from app.services.fund_api import FundAPIService, DEFAULT_FUND_CODES
 from app.services.database import get_db, DatabaseService
 from app.services.sector_flow import SectorFlowService
+from app.services.fund_realtime_estimate import estimate_fund_realtime_value
+from app.services.fund_holdings_sync import get_fund_holdings_with_quotes, sync_fund_holdings
+from app.services.database import get_db
 
 router = APIRouter(prefix="/funds", tags=["基金"])
 
@@ -112,6 +115,90 @@ async def get_fund_chart(
         }
     
     return APIResponse(data=chart_data)
+
+
+@router.get("/{fund_code}/holdings", response_model=APIResponse)
+async def get_fund_holdings(fund_code: str):
+    """
+    获取基金重仓股及实时行情
+    优先从数据库获取，如果没有则自动同步
+    """
+    try:
+        data = await get_fund_holdings_with_quotes(fund_code)
+        
+        if not data:
+            return APIResponse(
+                code=404,
+                message="无法获取基金持仓数据",
+                data=None
+            )
+        
+        return APIResponse(data=data)
+        
+    except Exception as e:
+        return APIResponse(
+            code=500,
+            message=f"获取持仓数据失败: {str(e)}",
+            data=None
+        )
+
+
+@router.post("/{fund_code}/sync", response_model=APIResponse)
+async def sync_fund_data(fund_code: str):
+    """
+    手动同步基金持仓数据
+    用于管理员更新持仓信息
+    """
+    try:
+        db = await get_db()
+        success = await sync_fund_holdings(fund_code, db)
+        
+        if success:
+            return APIResponse(message="同步成功")
+        else:
+            return APIResponse(
+                code=400,
+                message="同步失败",
+                data=None
+            )
+            
+    except Exception as e:
+        return APIResponse(
+            code=500,
+            message=f"同步失败: {str(e)}",
+            data=None
+        )
+
+
+@router.get("/{fund_code}/estimate", response_model=APIResponse)
+async def get_fund_realtime_estimate(fund_code: str):
+    """
+    获取基金实时估值（基于持仓股票实时计算）
+    
+    算法：
+    1. 获取基金前10大重仓股及权重
+    2. 获取这些股票的实时涨跌幅
+    3. 加权计算估算涨跌幅
+    4. 应用修正系数（前10大持仓通常占总仓位的60-80%）
+    """
+    try:
+        estimate_data = await estimate_fund_realtime_value(fund_code)
+        
+        if not estimate_data:
+            return APIResponse(
+                code=404,
+                message="无法获取基金估值数据",
+                data=None
+            )
+        
+        return APIResponse(data=estimate_data)
+        
+    except Exception as e:
+        return APIResponse(
+            code=500,
+            message=f"估值计算失败: {str(e)}",
+            data=None
+        )
 
 
 @router.get("/{fund_code}/flow", response_model=APIResponse)

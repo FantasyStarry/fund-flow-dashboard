@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import FundHeaderCard from '@/components/dashboard/FundHeaderCard';
 import HoldingsCard from '@/components/dashboard/HoldingsCard';
+import FundHoldingsCard from '@/components/dashboard/FundHoldingsCard';
 import FlowCard from '@/components/dashboard/FlowCard';
 import IntradayChart from '@/components/charts/IntradayChart';
 import { Fund, FundChart, FundFlow, getFundDetail, getFundChart, getFundFlow } from '@/lib/api';
@@ -147,18 +148,21 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* 资金流向 */}
-      <FlowCard 
-        flow={flowData} 
-        onRefresh={async () => {
-          try {
-            const flowRes = await getFundFlow(defaultFundCode);
-            if (flowRes.success) setFlowData(flowRes.data);
-          } catch (error) {
-            console.error('刷新资金流向失败:', error);
-          }
-        }}
-      />
+      {/* 资金流向和重仓股 */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <FlowCard 
+          flow={flowData} 
+          onRefresh={async () => {
+            try {
+              const flowRes = await getFundFlow(defaultFundCode);
+              if (flowRes.success) setFlowData(flowRes.data);
+            } catch (error) {
+              console.error('刷新资金流向失败:', error);
+            }
+          }}
+        />
+        <FundHoldingsCard fundCode={defaultFundCode} />
+      </div>
     </div>
   );
 }
